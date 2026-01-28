@@ -35,6 +35,14 @@ function Navbar() {
                 Clients
               </Link>
             </li>
+            <li>
+              <Link 
+                to="/invoices" 
+                className={isActive('/invoices') ? 'active' : ''}
+              >
+                Invoices
+              </Link>
+            </li>
           </ul>
         </div>
       </div>

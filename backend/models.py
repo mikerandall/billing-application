@@ -129,3 +129,58 @@ class InvoiceCreate(BaseModel):
     hour_entry_ids: List[str]
     invoice_date: Optional[date] = None
     due_days: int = 14
+
+class HourEntryDetail(BaseModel):
+    """Hour entry details for invoice view"""
+    id: Optional[PyObjectId] = Field(default_factory=PyObjectId, alias="_id")
+    date: date
+    hours: float
+    description: Optional[str] = ""
+
+    class Config:
+        populate_by_name = True
+        arbitrary_types_allowed = True
+        json_encoders = {ObjectId: str}
+
+class InvoiceDetail(BaseModel):
+    """Extended invoice model with populated hour entries and names"""
+    id: Optional[PyObjectId] = Field(default_factory=PyObjectId, alias="_id")
+    client_id: PyObjectId
+    project_id: PyObjectId
+    client_name: str
+    project_name: str
+    invoice_number: str
+    invoice_date: date
+    due_date: date
+    hour_entries: List[HourEntryDetail] = []
+    total_hours: float
+    hourly_rate: float
+    total_amount: float
+    pdf_filename: Optional[str] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    class Config:
+        populate_by_name = True
+        arbitrary_types_allowed = True
+        json_encoders = {ObjectId: str}
+
+class InvoiceListItem(BaseModel):
+    """Invoice summary for list view"""
+    id: Optional[PyObjectId] = Field(default_factory=PyObjectId, alias="_id")
+    client_id: PyObjectId
+    project_id: PyObjectId
+    client_name: str
+    project_name: str
+    invoice_number: str
+    invoice_date: date
+    due_date: date
+    total_hours: float
+    hourly_rate: float
+    total_amount: float
+    pdf_filename: Optional[str] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    class Config:
+        populate_by_name = True
+        arbitrary_types_allowed = True
+        json_encoders = {ObjectId: str}

@@ -9,7 +9,7 @@ import subprocess
 from pathlib import Path
 
 from database import get_database
-from models import Invoice, InvoiceCreate
+from models import Invoice, InvoiceCreate, InvoiceDetail, InvoiceListItem, HourEntryDetail
 from config import COMPANY_INFO, APP_SETTINGS
 
 router = APIRouter(prefix="/invoices", tags=["invoices"])
@@ -47,7 +47,7 @@ async def debug_invoice_creation(invoice_data: InvoiceCreate):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Debug error: {str(e)}")
 
-@router.get("/", response_model=List[Invoice])
+@router.get("/", response_model=List[InvoiceListItem])
 async def list_invoices(client_id: str = None, project_id: str = None):
     """Get all invoices, optionally filtered by client or project"""
     db = get_database()
@@ -63,15 +63,37 @@ async def list_invoices(client_id: str = None, project_id: str = None):
             raise HTTPException(status_code=400, detail="Invalid project ID")
         query["project_id"] = ObjectId(project_id)
     
+    # Cache for client and project names
+    client_cache = {}
+    project_cache = {}
+    
     invoices = []
     for invoice_doc in db.invoices.find(query).sort("invoice_date", -1):
-        invoices.append(Invoice(**invoice_doc))
+        # Get client name (with caching)
+        client_id_obj = invoice_doc["client_id"]
+        if client_id_obj not in client_cache:
+            client = db.clients.find_one({"_id": client_id_obj})
+            client_cache[client_id_obj] = client["name"] if client else "Unknown Client"
+        
+        # Get project name (with caching)
+        project_id_obj = invoice_doc["project_id"]
+        if project_id_obj not in project_cache:
+            project = db.projects.find_one({"_id": project_id_obj})
+            project_cache[project_id_obj] = project["name"] if project else "Unknown Project"
+        
+        # Create list item with names
+        invoice_data = {
+            **invoice_doc,
+            "client_name": client_cache[client_id_obj],
+            "project_name": project_cache[project_id_obj]
+        }
+        invoices.append(InvoiceListItem(**invoice_data))
     
     return invoices
 
-@router.get("/{invoice_id}", response_model=Invoice)
+@router.get("/{invoice_id}", response_model=InvoiceDetail)
 async def get_invoice(invoice_id: str):
-    """Get a specific invoice by ID"""
+    """Get a specific invoice by ID with expanded hour entries"""
     if not ObjectId.is_valid(invoice_id):
         raise HTTPException(status_code=400, detail="Invalid invoice ID")
     
@@ -81,7 +103,27 @@ async def get_invoice(invoice_id: str):
     if not invoice_doc:
         raise HTTPException(status_code=404, detail="Invoice not found")
     
-    return Invoice(**invoice_doc)
+    # Get client and project names
+    client = db.clients.find_one({"_id": invoice_doc["client_id"]})
+    project = db.projects.find_one({"_id": invoice_doc["project_id"]})
+    
+    # Get full hour entry details
+    hour_entry_ids = invoice_doc.get("hour_entries", [])
+    hour_entries_docs = list(db.hours.find({"_id": {"$in": hour_entry_ids}}))
+    
+    # Convert to HourEntryDetail objects and sort by date
+    hour_entries = [HourEntryDetail(**entry) for entry in hour_entries_docs]
+    hour_entries.sort(key=lambda x: x.date)
+    
+    # Build detailed response
+    invoice_data = {
+        **invoice_doc,
+        "client_name": client["name"] if client else "Unknown Client",
+        "project_name": project["name"] if project else "Unknown Project",
+        "hour_entries": hour_entries
+    }
+    
+    return InvoiceDetail(**invoice_data)
 
 @router.post("/", response_model=Invoice, status_code=status.HTTP_201_CREATED)
 async def create_invoice(invoice_data: InvoiceCreate):

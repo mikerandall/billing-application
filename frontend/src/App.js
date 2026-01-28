@@ -8,6 +8,8 @@ import ClientView from './pages/ClientView';
 import ClientForm from './pages/ClientForm';
 import ProjectForm from './pages/ProjectForm';
 import CreateInvoice from './pages/CreateInvoice';
+import InvoiceList from './pages/InvoiceList';
+import InvoiceView from './pages/InvoiceView';
 
 function App() {
   return (
@@ -25,6 +27,8 @@ function App() {
               <Route path="/clients/:clientId/projects/new" element={<ProjectForm />} />
               <Route path="/projects/:id/edit" element={<ProjectForm />} />
               <Route path="/projects/:id/invoice" element={<CreateInvoice />} />
+              <Route path="/invoices" element={<InvoiceList />} />
+              <Route path="/invoices/:id" element={<InvoiceView />} />
             </Routes>
           </div>
         </div>
