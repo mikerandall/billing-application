@@ -5,7 +5,7 @@ import { projectsAPI, hoursAPI } from '../utils/api';
 import { format, parseISO } from 'date-fns';
 
 function Home() {
-  const { activeProjects, clients, loading } = useApp();
+  const { activeProjects, projects, clients, loading } = useApp();
   const [projectSummaries, setProjectSummaries] = useState([]);
   const [showHourForm, setShowHourForm] = useState(null);
   const [hourFormData, setHourFormData] = useState({
@@ -62,7 +62,7 @@ function Home() {
   };
 
   const getProjectName = (projectId) => {
-    const project = activeProjects.find(p => p._id === projectId);
+    const project = projects.find(p => p._id === projectId);
     return project ? project.name : 'Unknown Project';
   };
 
@@ -368,7 +368,7 @@ function Home() {
               </thead>
               <tbody>
                 {allHours.map((hour) => {
-                  const project = activeProjects.find(p => p._id === hour.project_id);
+                  const project = projects.find(p => p._id === hour.project_id);
                   const isEditing = editingHour === hour._id;
                   
                   return (
