@@ -116,7 +116,7 @@ function ProjectForm() {
   };
 
   const getClientName = () => {
-    const client = clients.find(c => c.id === formData.client_id);
+    const client = clients.find(c => c._id === formData.client_id);
     return client ? client.name : 'Unknown Client';
   };
 

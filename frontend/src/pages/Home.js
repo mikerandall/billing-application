@@ -244,11 +244,7 @@ function Home() {
                   </div>
                 </div>
                 
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                  <div>
-                    <p className="text-xs text-gray">Total Hours</p>
-                    <p className="text-lg font-semibold">{project.total_hours || 0}</p>
-                  </div>
+                <div className="grid grid-cols-3 gap-4">
                   <div>
                     <p className="text-xs text-gray">Uninvoiced Hours</p>
                     <p className="text-lg font-semibold text-orange-600">{project.uninvoiced_hours || 0}</p>
