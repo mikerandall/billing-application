@@ -20,7 +20,7 @@ echo "🚀 Backend starting with logs visible below:"
 echo "=============================================="
 
 # Start backend in foreground but allow script to continue
-uvicorn main:app --reload --host 0.0.0.0 --port 8000 &
+uvicorn main:app --reload --host 0.0.0.0 --port 8822 &
 BACKEND_PID=$!
 
 # Wait for backend to start
@@ -30,15 +30,15 @@ sleep 3
 echo ""
 echo "Starting React frontend (logs suppressed)..."
 cd ../frontend
-npm start > /dev/null 2>&1 &
+PORT=3322 npm start > /dev/null 2>&1 &
 FRONTEND_PID=$!
 cd ..
 
 echo ""
 echo "🚀 Development servers started!"
-echo "📱 Frontend: http://localhost:3000"
-echo "🔧 Backend API: http://localhost:8000"
-echo "📚 API Docs: http://localhost:8000/docs"
+echo "📱 Frontend: http://localhost:3322"
+echo "🔧 Backend API: http://localhost:8822"
+echo "📚 API Docs: http://localhost:8822/docs"
 echo ""
 echo "Backend logs will appear below. Press Ctrl+C to stop all servers"
 echo "=============================================="

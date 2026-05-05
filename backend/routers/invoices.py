@@ -266,7 +266,8 @@ async def generate_invoice_pdf(client, project, hour_entries, invoice_dict, hour
         invoice_data["hours"].append({
             "date": entry["date"].isoformat(),
             "hours": entry["hours"],
-            "description": entry.get("description", "")
+            "description": entry.get("description", ""),
+            "technical_notes": entry.get("technical_notes", ""),
         })
     
     # Create temp JSON file

@@ -4,7 +4,7 @@ from bson import ObjectId
 from datetime import datetime, date
 
 from database import get_database
-from models import HourEntry, HourEntryCreate
+from models import HourEntry, HourEntryCreate, HourEntryUpdate
 
 router = APIRouter(prefix="/hours", tags=["hours"])
 
@@ -69,40 +69,33 @@ async def create_hour_entry(hour_entry: HourEntryCreate):
     return HourEntry(**created_hour)
 
 @router.put("/{hour_id}", response_model=HourEntry)
-async def update_hour_entry(hour_id: str, hour_update: HourEntryCreate):
-    """Update a hour entry"""
+async def update_hour_entry(hour_id: str, hour_update: HourEntryUpdate):
+    """Update an hour entry (including marking uninvoiced to bill again)."""
     if not ObjectId.is_valid(hour_id):
         raise HTTPException(status_code=400, detail="Invalid hour entry ID")
     
     db = get_database()
     
-    # Check if hour entry exists
     existing_hour = db.hours.find_one({"_id": ObjectId(hour_id)})
     if not existing_hour:
         raise HTTPException(status_code=404, detail="Hour entry not found")
     
-    # Check if already invoiced
-    if existing_hour.get("is_invoiced", False):
-        raise HTTPException(
-            status_code=400, 
-            detail="Cannot update invoiced hour entry"
-        )
-    
-    # Prepare update data
     update_data = hour_update.model_dump()
+    is_invoiced = update_data.pop("is_invoiced")
     if hour_update.project_id:
         update_data["project_id"] = ObjectId(hour_update.project_id)
-    # Convert date to datetime for MongoDB compatibility
     if "date" in update_data and isinstance(update_data["date"], date):
         update_data["date"] = datetime.combine(update_data["date"], datetime.min.time())
     
-    # Update hour entry
+    update_data["is_invoiced"] = is_invoiced
+    if not is_invoiced:
+        update_data["invoice_id"] = None
+    
     db.hours.update_one(
-        {"_id": ObjectId(hour_id)}, 
-        {"$set": update_data}
+        {"_id": ObjectId(hour_id)},
+        {"$set": update_data},
     )
     
-    # Return updated hour entry
     updated_hour = db.hours.find_one({"_id": ObjectId(hour_id)})
     return HourEntry(**updated_hour)
 

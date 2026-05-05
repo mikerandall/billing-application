@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { projectsAPI, hoursAPI, invoicesAPI } from '../utils/api';
 import { format } from 'date-fns';
+import HtmlField from '../components/HtmlField';
 
 function CreateInvoice() {
   const navigate = useNavigate();
@@ -270,6 +271,7 @@ function CreateInvoice() {
                     <th>Date</th>
                     <th>Hours</th>
                     <th>Description</th>
+                    <th>Technical Notes</th>
                     <th>Amount</th>
                   </tr>
                 </thead>
@@ -285,7 +287,8 @@ function CreateInvoice() {
                       </td>
                       <td>{format(new Date(entry.date), 'MMM dd, yyyy')}</td>
                       <td>{entry.hours}</td>
-                      <td>{entry.description || '-'}</td>
+                      <td className="align-top max-w-md"><HtmlField html={entry.description} /></td>
+                      <td className="align-top max-w-md"><HtmlField html={entry.technical_notes} /></td>
                       <td>${(entry.hours * (project.hourly_rate || 0)).toFixed(2)}</td>
                     </tr>
                   ))}

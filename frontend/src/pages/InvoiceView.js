@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { invoicesAPI } from '../utils/api';
 import { format } from 'date-fns';
+import HtmlField from '../components/HtmlField';
 
 function InvoiceView() {
   const navigate = useNavigate();
@@ -155,6 +156,7 @@ function InvoiceView() {
                   <th>Date</th>
                   <th>Hours</th>
                   <th>Description</th>
+                  <th>Technical Notes</th>
                   <th>Amount</th>
                 </tr>
               </thead>
@@ -163,7 +165,8 @@ function InvoiceView() {
                   <tr key={entry._id}>
                     <td>{format(new Date(entry.date), 'MMM dd, yyyy')}</td>
                     <td>{entry.hours}</td>
-                    <td>{entry.description || '-'}</td>
+                    <td className="align-top max-w-md"><HtmlField html={entry.description} /></td>
+                    <td className="align-top max-w-md"><HtmlField html={entry.technical_notes} /></td>
                     <td>${(entry.hours * invoice.hourly_rate).toFixed(2)}</td>
                   </tr>
                 ))}
@@ -172,6 +175,7 @@ function InvoiceView() {
                 <tr className="font-semibold">
                   <td>Total</td>
                   <td>{invoice.total_hours}</td>
+                  <td></td>
                   <td></td>
                   <td>${invoice.total_amount.toFixed(2)}</td>
                 </tr>

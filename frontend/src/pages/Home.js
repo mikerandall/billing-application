@@ -3,6 +3,8 @@ import { Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { projectsAPI, hoursAPI } from '../utils/api';
 import { format, parseISO } from 'date-fns';
+import HtmlField from '../components/HtmlField';
+import HourEntryForm from '../components/HourEntryForm';
 
 function Home() {
   const { activeProjects, projects, clients, loading } = useApp();
@@ -11,7 +13,8 @@ function Home() {
   const [hourFormData, setHourFormData] = useState({
     date: format(new Date(), 'yyyy-MM-dd'),
     hours: '',
-    description: ''
+    description: '',
+    technical_notes: ''
   });
   const [allHours, setAllHours] = useState([]);
   const [hoursLoading, setHoursLoading] = useState(false);
@@ -19,7 +22,9 @@ function Home() {
   const [editFormData, setEditFormData] = useState({
     date: '',
     hours: '',
-    description: ''
+    description: '',
+    technical_notes: '',
+    is_invoiced: false,
   });
 
   useEffect(() => {
@@ -85,7 +90,9 @@ function Home() {
     setEditFormData({
       date: hour.date.split('T')[0], // Convert ISO date to YYYY-MM-DD format
       hours: hour.hours.toString(),
-      description: hour.description || ''
+      description: hour.description || '',
+      technical_notes: hour.technical_notes || '',
+      is_invoiced: Boolean(hour.is_invoiced),
     });
   };
 
@@ -94,7 +101,9 @@ function Home() {
     setEditFormData({
       date: '',
       hours: '',
-      description: ''
+      description: '',
+      technical_notes: '',
+      is_invoiced: false,
     });
   };
 
@@ -107,14 +116,18 @@ function Home() {
         project_id: originalHour.project_id,
         date: editFormData.date,
         hours: parseFloat(editFormData.hours),
-        description: editFormData.description
+        description: editFormData.description,
+        technical_notes: editFormData.technical_notes,
+        is_invoiced: editFormData.is_invoiced,
       });
       
       setEditingHour(null);
       setEditFormData({
         date: '',
         hours: '',
-        description: ''
+        description: '',
+        technical_notes: '',
+        is_invoiced: false,
       });
       
       // Refresh both hours list and project summaries
@@ -126,20 +139,11 @@ function Home() {
     }
   };
 
-  const handleEditFormChange = (e) => {
-    const { name, value } = e.target;
-    setEditFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-  };
-
   // Test functions for invoice functionality
   const handleTestMarkInvoiced = async (projectId) => {
     try {
       const response = await hoursAPI.testMarkInvoiced(projectId);
       alert(`Success: ${response.data.message}`);
-      // Refresh data
       loadProjectSummaries();
       loadAllHours();
     } catch (error) {
@@ -152,7 +156,6 @@ function Home() {
     try {
       const response = await hoursAPI.testMarkUninvoiced(projectId);
       alert(`Success: ${response.data.message}`);
-      // Refresh data
       loadProjectSummaries();
       loadAllHours();
     } catch (error) {
@@ -167,17 +170,19 @@ function Home() {
         project_id: projectId,
         date: hourFormData.date,
         hours: parseFloat(hourFormData.hours),
-        description: hourFormData.description
+        description: hourFormData.description,
+        technical_notes: hourFormData.technical_notes
       });
       
       setShowHourForm(null);
       setHourFormData({
         date: format(new Date(), 'yyyy-MM-dd'),
         hours: '',
-        description: ''
+        description: '',
+        technical_notes: ''
       });
-      loadProjectSummaries(); // Refresh summaries
-      loadAllHours(); // Refresh hours list
+      loadProjectSummaries();
+      loadAllHours();
     } catch (error) {
       console.error('Error logging hours:', error);
     }
@@ -270,65 +275,16 @@ function Home() {
                 )}
                 
                 {showHourForm === project._id && (
-                  <div className="mt-4 p-4" style={{ background: '#f8fafc', borderRadius: '6px' }}>
-                    <h4 className="mb-4">Log Hours for {project.name}</h4>
-                    <div className="grid grid-3 gap-4">
-                      <div className="form-group">
-                        <label className="form-label">Date</label>
-                        <input
-                          type="date"
-                          className="form-input"
-                          value={hourFormData.date}
-                          onChange={(e) => setHourFormData({
-                            ...hourFormData,
-                            date: e.target.value
-                          })}
-                        />
-                      </div>
-                      <div className="form-group">
-                        <label className="form-label">Hours</label>
-                        <input
-                          type="number"
-                          step="0.25"
-                          className="form-input"
-                          placeholder="8.5"
-                          value={hourFormData.hours}
-                          onChange={(e) => setHourFormData({
-                            ...hourFormData,
-                            hours: e.target.value
-                          })}
-                        />
-                      </div>
-                      <div className="form-group">
-                        <label className="form-label">Description (Optional)</label>
-                        <input
-                          type="text"
-                          className="form-input"
-                          placeholder="Development work"
-                          value={hourFormData.description}
-                          onChange={(e) => setHourFormData({
-                            ...hourFormData,
-                            description: e.target.value
-                          })}
-                        />
-                      </div>
-                    </div>
-                    <div className="flex gap-2 mt-4">
-                      <button
-                        onClick={() => handleLogHours(project._id)}
-                        className="btn btn-primary"
-                        disabled={!hourFormData.hours}
-                      >
-                        Log Hours
-                      </button>
-                      <button
-                        onClick={() => setShowHourForm(null)}
-                        className="btn btn-secondary"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
+                  <HourEntryForm
+                    title={`Log Hours for ${project.name}`}
+                    formData={hourFormData}
+                    setFormData={setHourFormData}
+                    onSubmit={() => handleLogHours(project._id)}
+                    onCancel={() => setShowHourForm(null)}
+                    submitLabel="Log Hours"
+                    submitDisabled={!hourFormData.hours}
+                    showInvoiceStatus={false}
+                  />
                 )}
               </div>
             ))}
@@ -358,6 +314,7 @@ function Home() {
                   <th className="text-left py-3 px-4">Client</th>
                   <th className="text-left py-3 px-4">Hours</th>
                   <th className="text-left py-3 px-4">Description</th>
+                  <th className="text-left py-3 px-4">Technical Notes</th>
                   <th className="text-left py-3 px-4">Status</th>
                   <th className="text-left py-3 px-4">Actions</th>
                 </tr>
@@ -366,21 +323,31 @@ function Home() {
                 {allHours.map((hour) => {
                   const project = projects.find(p => p._id === hour.project_id);
                   const isEditing = editingHour === hour._id;
-                  
+
+                  if (isEditing) {
+                    return (
+                      <tr key={`${hour._id}-edit`} className="border-b bg-slate-50/80">
+                        <td colSpan={8} className="p-4 align-top">
+                          <HourEntryForm
+                            embedded
+                            title={`Edit hours — ${getProjectName(hour.project_id)}${project ? ` · ${getClientName(project.client_id)}` : ''}`}
+                            formData={editFormData}
+                            setFormData={setEditFormData}
+                            onSubmit={() => handleUpdateHour(hour._id)}
+                            onCancel={handleCancelEdit}
+                            submitLabel="Save"
+                            submitDisabled={!editFormData.hours || !editFormData.date}
+                            showInvoiceStatus
+                          />
+                        </td>
+                      </tr>
+                    );
+                  }
+
                   return (
                     <tr key={hour._id} className="border-b hover:bg-gray-50">
                       <td className="py-3 px-4">
-                        {isEditing ? (
-                          <input
-                            type="date"
-                            name="date"
-                            className="form-input w-full"
-                            value={editFormData.date}
-                            onChange={handleEditFormChange}
-                          />
-                        ) : (
-                          format(parseISO(hour.date), 'MMM dd, yyyy')
-                        )}
+                          {format(parseISO(hour.date), 'MMM dd, yyyy')}
                       </td>
                       <td className="py-3 px-4">
                         {getProjectName(hour.project_id)}
@@ -389,35 +356,16 @@ function Home() {
                         {project ? getClientName(project.client_id) : 'Unknown Client'}
                       </td>
                       <td className="py-3 px-4 font-semibold">
-                        {isEditing ? (
-                          <input
-                            type="number"
-                            name="hours"
-                            step="0.25"
-                            className="form-input w-20"
-                            value={editFormData.hours}
-                            onChange={handleEditFormChange}
-                          />
-                        ) : (
-                          `${hour.hours}h`
-                        )}
+                          {`${hour.hours}h`}
+                      </td>
+                      <td className="py-3 px-4 max-w-md align-top">
+                          <HtmlField html={hour.description} />
+                      </td>
+                      <td className="py-3 px-4 max-w-md align-top">
+                          <HtmlField html={hour.technical_notes} />
                       </td>
                       <td className="py-3 px-4">
-                        {isEditing ? (
-                          <input
-                            type="text"
-                            name="description"
-                            className="form-input w-full"
-                            value={editFormData.description}
-                            onChange={handleEditFormChange}
-                            placeholder="Description"
-                          />
-                        ) : (
-                          hour.description || '-'
-                        )}
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className={`px-2 py-1 rounded text-xs ${
+                          <span className={`px-2 py-1 rounded text-xs ${
                           hour.is_invoiced 
                             ? 'bg-green-100 text-green-800' 
                             : 'bg-yellow-100 text-yellow-800'
@@ -426,23 +374,6 @@ function Home() {
                         </span>
                       </td>
                       <td className="py-3 px-4">
-                        {isEditing ? (
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => handleUpdateHour(hour._id)}
-                              className="btn btn-primary btn-sm"
-                              disabled={!editFormData.hours || !editFormData.date}
-                            >
-                              Save
-                            </button>
-                            <button
-                              onClick={handleCancelEdit}
-                              className="btn btn-secondary btn-sm"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        ) : (
                           <div className="flex gap-2">
                             <button
                               onClick={() => handleEditHour(hour)}
@@ -459,7 +390,6 @@ function Home() {
                               Delete
                             </button>
                           </div>
-                        )}
                       </td>
                     </tr>
                   );

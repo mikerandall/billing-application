@@ -4,13 +4,19 @@ generate_invoice.py
 Create a clean, professional PDF invoice from a JSON file.
 
 Requires:
-  pip install reportlab python-dateutil
+  pip install reportlab python-dateutil beautifulsoup4
 """
 
 import json
 import argparse
 from datetime import datetime
 from decimal import Decimal, ROUND_HALF_UP
+try:
+    from bs4 import BeautifulSoup, NavigableString, Comment
+except ImportError:
+    BeautifulSoup = None  # type: ignore
+
+from xml.sax.saxutils import escape as xml_escape
 
 from dateutil import parser as dateparser
 from reportlab.lib.pagesizes import LETTER
@@ -27,6 +33,176 @@ from reportlab.platypus import (
 )
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
+
+def _safe_href(href):
+    if not href or not str(href).strip():
+        return ""
+    href = str(href).strip()
+    low = href.lower()
+    if low.startswith("mailto:"):
+        rest = href[7:]
+        return href if "@" in rest else ""
+    from urllib.parse import urlparse
+
+    p = urlparse(href)
+    if p.scheme in ("http", "https") and p.netloc:
+        return href
+    return ""
+
+
+def description_to_reportlab_markup(text):
+    """
+    Convert stored description/notes to ReportLab Paragraph mini-markup.
+    Plain text (legacy) is escaped; HTML from Quill is mapped to supported tags.
+    """
+    if text is None:
+        return ""
+    s = str(text).strip()
+    if not s:
+        return ""
+    if BeautifulSoup is None:
+        return xml_escape(s).replace("\n", "<br/>")
+    if "<" not in s:
+        return xml_escape(s).replace("\n", "<br/>")
+    low = s.lower().replace(" ", "")
+    if low in ("<p><br></p>", "<p></p>", "<br>", "<br/>"):
+        return ""
+    return html_to_reportlab_markup(s)
+
+
+def html_to_reportlab_markup(html_fragment):
+    if BeautifulSoup is None:
+        return xml_escape(html_fragment).replace("\n", "<br/>")
+    soup = BeautifulSoup(f"<div>{html_fragment}</div>", "html.parser")
+    root = soup.div
+    if root is None:
+        return xml_escape(html_fragment).replace("\n", "<br/>")
+    for bad in root(["script", "style", "iframe", "img"]):
+        bad.decompose()
+    out = _children_markup_rl(root)
+    import re as _re
+
+    out = _re.sub(r"(?:<br\s*/>[\s]*)+$", "", out, flags=_re.I)
+    return out
+
+
+def _children_markup_rl(parent):
+    parts = []
+    for child in parent.children:
+        parts.append(_node_markup_rl(child))
+    return "".join(parts)
+
+
+def _node_markup_rl(node):
+    if isinstance(node, Comment):
+        return ""
+    if isinstance(node, NavigableString):
+        txt = str(node)
+        if not txt:
+            return ""
+        return xml_escape(txt)
+    if getattr(node, "name", None) is None:
+        return ""
+    name = node.name.lower()
+    if name == "br":
+        return "<br/>"
+    return _element_markup_rl(node)
+
+
+def _element_markup_rl(tag):
+    name = tag.name.lower()
+    if name in ("script", "style", "iframe", "img"):
+        return ""
+
+    inner = _children_markup_rl(tag)
+
+    if name in ("strong", "b"):
+        return f"<b>{inner}</b>"
+    if name in ("em", "i"):
+        return f"<i>{inner}</i>"
+    if name == "u":
+        return f"<u>{inner}</u>"
+    if name in ("s", "strike"):
+        return inner
+    if name == "sub":
+        return f"<sub>{inner}</sub>"
+    if name == "sup":
+        return f"<super>{inner}</super>"
+    if name == "a":
+        href = _safe_href(tag.get("href"))
+        if not href:
+            return inner
+        from html import escape as html_escape_attr
+
+        h_attr = html_escape_attr(href, quote=True)
+        return f'<a href="{h_attr}" color="blue">{inner}</a>'
+
+    if name in ("h1",):
+        return f'<b><font size="13">{inner}</font></b><br/><br/>'
+    if name in ("h2",):
+        return f'<b><font size="12">{inner}</font></b><br/><br/>'
+    if name in ("h3", "h4"):
+        return f"<b>{inner}</b><br/><br/>"
+    if name == "blockquote":
+        return f"<i>{inner}</i><br/><br/>"
+    if name == "pre":
+        raw = tag.get_text()
+        return f'<font name="Courier">{xml_escape(raw)}</font><br/><br/>'
+    if name == "p":
+        if inner:
+            return inner + "<br/><br/>"
+        return ""
+    if name == "div":
+        if inner:
+            return inner + "<br/>"
+        return ""
+
+    if name == "span":
+        classes = tag.get("class") or []
+        if isinstance(classes, str):
+            classes = [classes]
+        inner_sp = _children_markup_rl(tag)
+        if "ql-size-small" in classes:
+            return f'<font size="8">{inner_sp}</font>'
+        if "ql-size-large" in classes:
+            return f'<font size="11">{inner_sp}</font>'
+        if "ql-size-huge" in classes:
+            return f'<font size="14">{inner_sp}</font>'
+        return inner_sp
+
+    if name == "ul":
+        return _list_markup_rl(tag, ordered=False, depth=0)
+    if name == "ol":
+        return _list_markup_rl(tag, ordered=True, depth=0)
+    if name == "li":
+        return inner + "<br/>"
+
+    return _children_markup_rl(tag)
+
+
+def _list_markup_rl(list_tag, ordered, depth):
+    lines = []
+    n = 1
+    for child in list_tag.children:
+        if getattr(child, "name", None) is None:
+            continue
+        if child.name.lower() != "li":
+            continue
+        bullet = f"{n}. " if ordered else "• "
+        n += 1
+        parts = []
+        for sub in child.children:
+            if getattr(sub, "name", None) and sub.name.lower() in ("ul", "ol"):
+                parts.append(
+                    _list_markup_rl(sub, ordered=(sub.name.lower() == "ol"), depth=depth + 1)
+                )
+            else:
+                parts.append(_node_markup_rl(sub))
+        line = "".join(parts).strip()
+        indent = "&nbsp;" * (4 * depth)
+        lines.append(indent + bullet + line + "<br/>")
+    return "".join(lines) + "<br/>"
+
 
 def money(n):
     return f"${Decimal(n).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP):,.2f}"
@@ -76,10 +252,16 @@ def compute_totals(hours_list):
         date = row.get("date")
         hrs = Decimal(str(row.get("hours", "0")))
         desc = row.get("description", "")
+        # notes = row.get("technical_notes", "") or ""
         total_hours += hrs
         # parse & keep ISO for sorting
         dt = dateparser.parse(date).date()
-        normalized.append({"date": dt, "hours": hrs, "description": desc})
+        normalized.append({
+            "date": dt,
+            "hours": hrs,
+            "description": desc,
+            # "technical_notes": notes,
+        })
     # sort by date descending by default
     normalized.sort(key=lambda r: r["date"], reverse=True)
     return total_hours, normalized
@@ -185,44 +367,50 @@ def build_pdf(payload, args):
     # Project & description block
     proj_name = payload["project"].get("name", "")
     proj_url = payload["project"].get("url", "")
-    desc_lines = [f"<b>Project:</b> {proj_name}"]
+    desc_lines = [f"<b>Project:</b> {xml_escape(str(proj_name))}"]
     if proj_url:
-        desc_lines.append(f"<b>URL:</b> {proj_url}")
-    desc_lines.append(f"<b>Description:</b> {work_desc}")
+        desc_lines.append(f"<b>URL:</b> {xml_escape(proj_url)}")
+    desc_lines.append(f"<b>Description:</b> {xml_escape(str(work_desc))}")
     if period:
         desc_lines.append(f"<b>Work Period:</b> {period}")
 
     elems.append(Paragraph("<br/>".join(desc_lines), styles["Body"]))
     elems.append(Spacer(1, 8))
 
-    # Hours table
+    # Hours table (rich text from WYSIWYG / HTML stored in DB)
     table_data = [["Date", "Description", "Hours"]]
     for r in normalized:
-        # Wrap description text in Paragraph for proper text wrapping
-        # Use smaller font for description to fit better
         desc_style = ParagraphStyle(
             'DescriptionStyle',
             parent=styles['Body'],
             fontSize=8.5,
             leading=10
         )
-        desc_paragraph = Paragraph(r["description"], desc_style)
+        safe_desc = description_to_reportlab_markup(r.get("description", ""))
+        safe_notes = description_to_reportlab_markup(r.get("technical_notes", ""))
+        desc_paragraph = Paragraph(safe_desc or " ", desc_style)
+        notes_paragraph = Paragraph(safe_notes or " ", desc_style)
         table_data.append([
-            r["date"].strftime("%Y-%m-%d (%a)"), 
-            desc_paragraph, 
-            hours_fmt(r["hours"])
+            r["date"].strftime("%Y-%m-%d (%a)"),
+            desc_paragraph,
+            notes_paragraph,
+            hours_fmt(r["hours"]),
         ])
 
-    tbl = Table(table_data, colWidths=[1.4 * inch, 4.0 * inch, 1.2 * inch], hAlign="LEFT")
+    tbl = Table(
+        table_data,
+        colWidths=[1.1 * inch, 4.5 * inch, .75 * inch],
+        hAlign="LEFT",
+    )
     tbl.setStyle(
         TableStyle(
             [
                 ("FONT", (0, 0), (-1, 0), "Helvetica-Bold"),
                 ("FONTSIZE", (0, 0), (-1, -1), 9.5),
-                ("ALIGN", (2, 1), (2, -1), "RIGHT"),  # Hours column right-aligned
-                ("ALIGN", (0, 1), (1, -1), "LEFT"),   # Date and Description left-aligned
+                ("ALIGN", (3, 1), (3, -1), "RIGHT"),
+                ("ALIGN", (0, 1), (2, -1), "LEFT"),
                 ("ALIGN", (0, 0), (-1, 0), "LEFT"),
-                ("VALIGN", (0, 0), (-1, -1), "TOP"),  # Align all cells to top
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
                 ("LINEBEFORE", (0, 0), (0, -1), 0.0, colors.white),
                 ("LINEABOVE", (0, 0), (-1, 0), 0.75, colors.black),
                 ("LINEBELOW", (0, 0), (-1, 0), 0.75, colors.black),

@@ -62,6 +62,7 @@ class HourEntry(BaseModel):
     date: date
     hours: float
     description: Optional[str] = ""
+    technical_notes: Optional[str] = ""
     is_invoiced: bool = False
     invoice_id: Optional[PyObjectId] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -123,6 +124,16 @@ class HourEntryCreate(BaseModel):
     date: date
     hours: float
     description: Optional[str] = ""
+    technical_notes: Optional[str] = ""
+
+
+class HourEntryUpdate(BaseModel):
+    project_id: str
+    date: date
+    hours: float
+    description: Optional[str] = ""
+    technical_notes: Optional[str] = ""
+    is_invoiced: bool
 
 class InvoiceCreate(BaseModel):
     project_id: str
@@ -136,6 +147,7 @@ class HourEntryDetail(BaseModel):
     date: date
     hours: float
     description: Optional[str] = ""
+    technical_notes: Optional[str] = ""
 
     class Config:
         populate_by_name = True
