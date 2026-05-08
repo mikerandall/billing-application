@@ -362,7 +362,7 @@ function Home() {
                           <HtmlField html={hour.description} />
                       </td>
                       <td className="py-3 px-4 max-w-md align-top">
-                          <HtmlField html={hour.technical_notes} />
+                          <HtmlField html={hour.technical_notes} expandable />
                       </td>
                       <td className="py-3 px-4">
                           <span className={`px-2 py-1 rounded text-xs ${
